@@ -10,6 +10,8 @@
  */
 
 use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Window};
+use futures::StreamExt;
 
 #[derive(Serialize, Deserialize)]
 struct OllamaRequest {
@@ -21,23 +23,21 @@ struct OllamaRequest {
 #[derive(Serialize, Deserialize)]
 struct OllamaResponse {
 	response: String,
+	done: bool,
 }
 
-
 #[tauri::command]
-async fn QueryOllama(prompt: String) -> Result<String, String> {
+async fn QueryOllama(window: Window, prompt: String) -> Result<String, String> {
 	// Using reqwest client to make HTTP calls to local Ollama instance.
-	// We create a new client for each request to avoid global state complexity, 
-	// though connection pooling might be a future optimization.
 	let Client = reqwest::Client::new();
 	
 	let Request = OllamaRequest {
 		model: "qwen2-math:1.5b".to_string(),
 		prompt,
-		stream: false,
+		stream: true, // Enable streaming
 	};
 
-	// Return error as string strictly.
+	// Initiate the request
 	let Response = Client.post("http://localhost:11434/api/generate")
 		.json(&Request)
 		.send()
@@ -48,11 +48,37 @@ async fn QueryOllama(prompt: String) -> Result<String, String> {
 		return Err(format!("Request failed with status: {}", Response.status()));
 	}
 
-	let Data: OllamaResponse = Response.json()
-		.await
-		.map_err(|e| e.to_string())?;
+	// Process the stream
+	let mut Stream = Response.bytes_stream();
+	let mut FullResponse = String::new();
 
-	Ok(Data.response)
+	while let Some(ChunkResult) = Stream.next().await {
+		let Chunk = ChunkResult.map_err(|e| e.to_string())?;
+		let ChunkStr = String::from_utf8_lossy(&Chunk);
+
+		// Ollama sends JSON objects in the stream, sometimes multiple per chunk.
+		// We need to parse them.
+		for Line in ChunkStr.split('\n') {
+			if Line.trim().is_empty() {
+				continue;
+			}
+			
+			if let Ok(Data) = serde_json::from_str::<OllamaResponse>(Line) {
+				// Emit the token to the frontend
+				if let Err(e) = window.emit("ollama-event", Data.response.clone()) {
+					eprintln!("Failed to emit event: {}", e);
+				}
+				
+				FullResponse.push_str(&Data.response);
+				
+				if Data.done {
+					break;
+				}
+			}
+		}
+	}
+
+	Ok(FullResponse)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

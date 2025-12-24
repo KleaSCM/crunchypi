@@ -9,6 +9,8 @@
 	 * Email: KleaSCM@gmail.com
 	 */
 	import { invoke } from "@tauri-apps/api/core";
+	import { listen } from "@tauri-apps/api/event";
+	import { onDestroy } from "svelte";
 	import ChatBox from "../lib/components/ChatBox.svelte";
 
 	interface Message {
@@ -27,6 +29,8 @@
 	 *
 	 * Prevents empty submissions and sets loading state to disable UI during processing.
 	 */
+	let Unlisten: (() => void) | null = null;
+
 	async function HandleSubmit() {
 		// Prevent empty or duplicate simultaneous requests.
 		if (!InputValue.trim() || IsLoading) {
@@ -41,19 +45,41 @@
 			InputElement.style.height = "auto";
 		}
 
+		// Add User Message
 		Messages = [...Messages, { role: "user", content: UserMsg }];
+
+		// Add Empty Assistant Message (placeholder for streaming)
+		Messages = [...Messages, { role: "assistant", content: "" }];
 		IsLoading = true;
 
+		// Set up event listener
+		Unlisten = await listen<string>("ollama-event", (event) => {
+			const Chunk = event.payload;
+			// Append chunk to the last message (which is the assistant's)
+			Messages[Messages.length - 1].content += Chunk;
+		});
+
 		try {
-			const Response = await invoke("QueryOllama", { prompt: UserMsg });
-			Messages = [...Messages, { role: "assistant", content: Response as string }];
+			// invoke still waits for the function to complete,
+			// but we get updates via the event listener above.
+			await invoke("QueryOllama", { prompt: UserMsg });
 		} catch (Error) {
 			console.error("Error:", Error);
-			Messages = [...Messages, { role: "assistant", content: `Error: ${Error}` }];
+			Messages[Messages.length - 1].content += `\nError: ${Error}`;
 		} finally {
 			IsLoading = false;
+			if (Unlisten) {
+				Unlisten();
+				Unlisten = null;
+			}
 		}
 	}
+
+	onDestroy(() => {
+		if (Unlisten) {
+			Unlisten();
+		}
+	});
 
 	/**
 	 * Handles keyboard shortcuts for submission.

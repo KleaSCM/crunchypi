@@ -140,15 +140,14 @@
 	.ChatContainer {
 		height: 100%; /* Fill the grid cell */
 		width: 100%;
-		min-height: 0; /* Critical for Grid item scrolling */
-		overflow-y: scroll; /* Force scrollbar */
+		min-height: 0px; /* Explicit pixel unit */
+		overflow-y: scroll !important; /* Force */
 		overflow-x: hidden;
 		padding: 20px;
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
 		scroll-behavior: smooth;
-		min-height: 0; /* Important for flex items to scroll */
 	}
 
 	.Message {
