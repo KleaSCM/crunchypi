@@ -1,0 +1,68 @@
+/**
+ * Global Stylesheet.
+ * 
+ * Defines CSS variables for the theme (Morning/Midnight/etc).
+ * Sets up global resets and scrollbar styling.
+ * 
+ * Author: KleaSCM
+ * Email: KleaSCM@gmail.com
+ */
+
+:root {
+    --bg-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --primary-accent: #fbc2eb;
+    --secondary-accent: #a18cd1;
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-family);
+    background: var(--bg-gradient);
+    color: var(--text-primary);
+    height: 100vh;
+    /* Strict height */
+    width: 100vw;
+    overflow: hidden;
+    /* No window scroll */
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 12px;
+    /* Wider for easier grabbing */
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    /* Visible track */
+}
+
+::-webkit-scrollbar-thumb {
+    background: #fbc2eb;
+    /* Pink accent color for visibility */
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    /* Contrast border */
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a18cd1;
+    /* Purple on hover */
+}
+
+h1,
+h2,
+h3 {
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
