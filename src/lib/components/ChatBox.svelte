@@ -3,33 +3,83 @@
 		text: string;
 		isMath: boolean;
 		display: boolean;
+		isGraph: boolean;
 	}
 
 	/**
-	 * Parses a string into text and math chunks.
-	 *
-	 * Detects LaTeX delimiters $$...$$ and $...$.
-	 * Returns an array of ContentPart for rendering.
+	 * Parses a string into text, math, and graph chunks.
 	 */
+	function SanitizeLatex(latex: string): string | null {
+		// 1. Remove \boxed{...} preserving content
+		let Clean = latex.replace(/\\boxed\{([^{}]*)\}/g, "$1");
+		// 2. Replace \frac{a}{b} with ((a)/(b))
+		// Simple iterative approach for non-nested fractions
+		while (Clean.includes("\\frac{")) {
+			Clean = Clean.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "(($1)/($2))");
+		}
+		// 3. Remove \left, \right
+		Clean = Clean.replace(/\\left|\\right/g, "");
+		// 4. \cdot -> *
+		Clean = Clean.replace(/\\cdot/g, "*");
+		// 5. Remove backslashes generally if not caught above (e.g. \, \!)
+		Clean = Clean.replace(/\\/g, "");
+
+		// 6. Check if it looks like y = ... or f(x) = ...
+		// Allow spaces, simple math chars.
+		const Match = Clean.match(/^\s*(y|f\(x\))\s*=\s*([x0-9+\-*/^(). ]+)\s*$/i);
+		if (Match) {
+			return Match[0];
+		}
+		return null;
+	}
+
 	function ParseContent(text: string): ContentPart[] {
 		const Parts: ContentPart[] = [];
-		// Regex to find $$...$$ (display), \[...\] (display), $...$ (inline), or \(...\) (inline)
-		// qwen2-math often outputs \[ ... \] for display math.
-		const Regex = /(\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\$[\s\S]*?\$)|(\\\([\s\S]*?\\\))/g;
+		// 1. Math Regex: $$...$$, \[...\], $...$, \(...\)
+		const MathRegex = /(\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\$[\s\S]*?\$)|(\\\([\s\S]*?\\\))/g;
+
+		// 2. Graph Regex: Heuristic for "y = ..." or "f(x) = ..." on its own line or clearly separated.
+		// Capturing group 1 is the full match.
+		const GraphRegex = /(?:^|\n)\s*(y\s*=\s*[x0-9+\-*/^(). ]+|f\(x\)\s*=\s*[x0-9+\-*/^(). ]+)\s*(?:\n|$)/gi;
 
 		let LastIndex = 0;
 		let Match;
 
-		while ((Match = Regex.exec(text)) !== null) {
-			// Add text before match
-			if (Match.index > LastIndex) {
+		while ((Match = MathRegex.exec(text)) !== null) {
+			const PreMatchText = text.slice(LastIndex, Match.index);
+
+			// Process PreMatchText for Graphs
+			let GraphLastIndex = 0;
+			let GraphMatch;
+			while ((GraphMatch = GraphRegex.exec(PreMatchText)) !== null) {
+				if (GraphMatch.index > GraphLastIndex) {
+					Parts.push({
+						text: PreMatchText.slice(GraphLastIndex, GraphMatch.index),
+						isMath: false,
+						display: false,
+						isGraph: false,
+					});
+				}
+
 				Parts.push({
-					text: text.slice(LastIndex, Match.index),
+					text: GraphMatch[1], // The function content
 					isMath: false,
 					display: false,
+					isGraph: true,
+				});
+
+				GraphLastIndex = GraphMatch.index + GraphMatch[0].length;
+			}
+			if (GraphLastIndex < PreMatchText.length) {
+				Parts.push({
+					text: PreMatchText.slice(GraphLastIndex),
+					isMath: false,
+					display: false,
+					isGraph: false,
 				});
 			}
 
+			// Add Math Chunk
 			const FullMatch = Match[0];
 			let IsDisplay = false;
 			let CleanMath = FullMatch;
@@ -52,17 +102,52 @@
 				text: CleanMath,
 				isMath: true,
 				display: IsDisplay,
+				isGraph: false,
 			});
+
+			// NEW: Check if this Math chunk is also a graphable function
+			// We try to sanitize and see if it yields a valid function string.
+			const GraphCandidate = SanitizeLatex(CleanMath);
+			if (GraphCandidate) {
+				Parts.push({
+					text: GraphCandidate,
+					isMath: false,
+					display: false,
+					isGraph: true,
+				});
+			}
 
 			LastIndex = Match.index + FullMatch.length;
 		}
 
-		// Add remaining text
-		if (LastIndex < text.length) {
+		// Process remaining text for Graphs
+		const Remaining = text.slice(LastIndex);
+		let GraphLastIndex = 0;
+		let GraphMatch;
+
+		while ((GraphMatch = GraphRegex.exec(Remaining)) !== null) {
+			if (GraphMatch.index > GraphLastIndex) {
+				Parts.push({
+					text: Remaining.slice(GraphLastIndex, GraphMatch.index),
+					isMath: false,
+					display: false,
+					isGraph: false,
+				});
+			}
 			Parts.push({
-				text: text.slice(LastIndex),
+				text: GraphMatch[1],
 				isMath: false,
 				display: false,
+				isGraph: true,
+			});
+			GraphLastIndex = GraphMatch.index + GraphMatch[0].length;
+		}
+		if (GraphLastIndex < Remaining.length) {
+			Parts.push({
+				text: Remaining.slice(GraphLastIndex),
+				isMath: false,
+				display: false,
+				isGraph: false,
 			});
 		}
 
@@ -72,6 +157,7 @@
 
 <script lang="ts">
 	import MathRenderer from "./MathRenderer.svelte";
+	import GraphRenderer from "./GraphRenderer.svelte";
 	import { afterUpdate } from "svelte";
 
 	interface Message {
@@ -119,6 +205,8 @@
 							{#each ParseContent(Msg.content) as Part}
 								{#if Part.isMath}
 									<MathRenderer content={Part.text} displayMode={Part.display} />
+								{:else if Part.isGraph}
+									<GraphRenderer Expression={Part.text} />
 								{:else}
 									<span>{Part.text}</span>
 								{/if}
