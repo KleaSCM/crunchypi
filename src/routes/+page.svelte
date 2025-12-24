@@ -20,6 +20,8 @@
 	let Messages: Message[] = [];
 	let IsLoading = false;
 
+	let InputElement: HTMLTextAreaElement;
+
 	/**
 	 * Submits the user's question to the backend.
 	 *
@@ -33,6 +35,11 @@
 
 		const UserMsg = InputValue;
 		InputValue = "";
+
+		// Reset textarea height immediately
+		if (InputElement) {
+			InputElement.style.height = "auto";
+		}
 
 		Messages = [...Messages, { role: "user", content: UserMsg }];
 		IsLoading = true;
@@ -66,7 +73,7 @@
 <div class="Container">
 	<header>
 		<h1>Crunchypi 🥧</h1>
-		<p class="Subtitle">Your cute AI math companion</p>
+		<p class="Subtitle"></p>
 	</header>
 
 	<ChatBox messages={Messages} />
@@ -74,11 +81,20 @@
 	<div class="InputArea">
 		<div class="InputWrapper">
 			<!-- rows="1" to keep it compact initially -->
+			<!-- Auto-expanding textarea -->
 			<textarea
+				bind:this={InputElement}
 				bind:value={InputValue}
 				on:keydown={HandleKeydown}
-				placeholder="Ask a math question... (e.g. Integral of x^2)"
+				on:input={(e) => {
+					// Auto-expand logic
+					const Target = e.target as HTMLTextAreaElement;
+					Target.style.height = "auto";
+					Target.style.height = Target.scrollHeight + "px";
+				}}
+				placeholder="Ask a math question... (Shift+Enter for new line)"
 				rows="1"
+				style="max-height: 200px; overflow-y: auto;"
 			></textarea>
 			<button disabled={IsLoading} on:click={HandleSubmit}>
 				{#if IsLoading}
@@ -135,7 +151,7 @@
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
 		border-radius: 24px;
-		padding: 8px 16px;
+		padding: 2px 4px; /* Reduced vertical padding */
 		display: flex;
 		align-items: center;
 		backdrop-filter: blur(10px);
@@ -154,7 +170,7 @@
 		color: #fff;
 		font-family: inherit;
 		font-size: 1rem;
-		padding: 8px;
+		padding: 2px 4px; /* Reduced vertical padding */
 		resize: none;
 		outline: none;
 		max-height: 100px;

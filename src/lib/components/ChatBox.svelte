@@ -105,7 +105,11 @@
 	{#each messages as Msg}
 		<div class="Message {Msg.role}">
 			<div class="Avatar">
-				{Msg.role === "user" ? "🌸" : "🤖"}
+				{#if Msg.role === "user"}
+					<img src="/Yuriko.jpg" alt="User" />
+				{:else}
+					<img src="/crunchypi.jpg" alt="AI" />
+				{/if}
 			</div>
 			<div class="ContentWrapper">
 				<div class="Bubble">
@@ -136,6 +140,7 @@
 	.ChatContainer {
 		height: 100%; /* Fill the grid cell */
 		width: 100%;
+		min-height: 0; /* Critical for Grid item scrolling */
 		overflow-y: scroll; /* Force scrollbar */
 		overflow-x: hidden;
 		padding: 20px;
@@ -162,15 +167,18 @@
 	}
 
 	.Avatar {
-		width: 36px;
-		height: 36px;
-		background: rgba(255, 255, 255, 0.1);
+		width: 42px;
+		height: 42px;
 		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.2rem;
+		overflow: hidden;
 		flex-shrink: 0;
+		border: 2px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.Avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 
 	.ContentWrapper {
